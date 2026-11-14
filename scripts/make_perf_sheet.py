@@ -1,5 +1,7 @@
-"""성과기록 xlsx 템플릿 생성. 사용: python3 scripts/make_perf_sheet.py <출력경로>
+"""성과기록 xlsx 생성. 사용: python3 scripts/make_perf_sheet.py <출력경로> [seed.csv]
+seed.csv(log/*_정규화.csv 형식)를 주면 그 행으로 채우고, 없으면 log/001·002 기본값을 쓴다.
 기존 파일이 있으면 중단한다(덮어쓰기 금지)."""
+import csv
 import os
 import sys
 
@@ -9,8 +11,8 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 INPUT = ["No", "게시일", "가게", "카테고리", "협찬", "커버 문구", "커버 유형", "톤",
          "조회", "도달", "좋아요", "댓글", "공유", "저장", "팔로우", "평균시청(초)", "건너뛰기율", "메모"]
-CALC = ["공유율", "저장율", "팔로우율", "공유/저장", "유형"]
-CATS = ["노포", "숨은맛집", "대중맛집", "바·술집", "기타"]
+CALC = ["공유율", "저장율", "팔로우율", "공유/저장", "유형", "공유/좋아요", "저장/좋아요", "팔로우/좋아요"]
+CATS = ["노포", "숨은맛집", "대중맛집", "바·술집", "브랜드·팝업", "카페·디저트", "기타"]
 COVERS = ["가격·룰", "궁금증(정체숨김)", "구성놀람", "공간반전", "일반워딩", "기타"]
 TONES = ["반말혼잣말", "존댓말구어체", "기타"]
 MAX_ROW = 200
@@ -29,9 +31,31 @@ def col(name):
     return get_column_letter((INPUT + CALC).index(name) + 1)
 
 
-def main(out):
+def load_seed(path):
+    """정규화 CSV → INPUT 순서 행 목록. 숫자는 int, 빈칸은 None."""
+    num = {"조회", "도달", "좋아요", "댓글", "공유", "저장", "팔로우", "평균시청"}
+    rows = []
+    for r in csv.DictReader(open(path, encoding="utf-8-sig")):
+        row = []
+        for k in ["No", "게시일", "가게", "카테고리", "협찬", "커버문구", "커버유형", "톤", "조회", "도달",
+                  "좋아요", "댓글", "공유", "저장", "팔로우", "평균시청", "건너뛰기율", "메모"]:
+            v = (r.get(k) or "").strip()
+            if v == "":
+                row.append(None)
+            elif k in num or k == "No":
+                row.append(int(v))
+            elif k == "건너뛰기율":
+                row.append(float(v))
+            else:
+                row.append(v)
+        rows.append(row)
+    return rows
+
+
+def main(out, seed=None):
     if os.path.exists(out):
         sys.exit(f"이미 존재: {out} (덮어쓰지 않음, _v2로 저장할 것)")
+    seed = seed if seed is not None else SEED
     wb = Workbook()
     ws = wb.active
     ws.title = "게시물"
@@ -46,8 +70,8 @@ def main(out):
 
     R, S, V, F = col("도달"), col("저장"), col("공유"), col("팔로우")
     for r in range(2, MAX_ROW + 1):
-        if r - 2 < len(SEED):
-            for i, v in enumerate(SEED[r - 2]):
+        if r - 2 < len(seed):
+            for i, v in enumerate(seed[r - 2]):
                 ws.cell(r, i + 1, v)
         base = len(INPUT)
         ws.cell(r, base + 1, f'=IF(OR({R}{r}="",{V}{r}=""),"",{V}{r}/{R}{r})')
@@ -55,6 +79,12 @@ def main(out):
         ws.cell(r, base + 3, f'=IF(OR({R}{r}="",{F}{r}=""),"",{F}{r}/{R}{r})')
         ws.cell(r, base + 4, f'=IF(OR({S}{r}="",{S}{r}=0,{V}{r}=""),"",{V}{r}/{S}{r})')
         ws.cell(r, base + 5, f'=IF({col("공유/저장")}{r}="","",IF({col("공유/저장")}{r}>=1,"소환형","위시리스트형"))')
+        Lk = col("좋아요")
+        for k, src in [(6, V), (7, S), (8, F)]:
+            ws.cell(r, base + k, f'=IF(OR({Lk}{r}="",{Lk}{r}=0,{src}{r}=""),"",{src}{r}/{Lk}{r})')
+        ws.cell(r, base + 6).number_format = "0.00"
+        ws.cell(r, base + 7).number_format = "0.00"
+        ws.cell(r, base + 8).number_format = "0.0%"
         for k in range(1, 4):
             ws.cell(r, base + k).number_format = "0.00%"
         ws.cell(r, base + 4).number_format = "0.00"
@@ -70,7 +100,7 @@ def main(out):
 
     sm = wb.create_sheet("요약")
     rng = lambda n: f"게시물!${col(n)}$2:${col(n)}${MAX_ROW}"
-    metrics = ["공유율", "저장율", "팔로우율", "평균시청(초)"]
+    metrics = ["공유율", "저장율", "팔로우율", "평균시청(초)", "공유/좋아요", "팔로우/좋아요"]
     row = 1
     for group, items in [("카테고리", CATS), ("커버 유형", COVERS), ("협찬", ["Y", "N"]), ("톤", TONES)]:
         sm.cell(row, 1, group).font = head
@@ -83,12 +113,12 @@ def main(out):
             sm.cell(row, 2, f'=COUNTIFS({rng(group)},$A{row})')
             for j, m in enumerate(metrics):
                 c = sm.cell(row, 3 + j, f'=IFERROR(AVERAGEIFS({rng(m)},{rng(group)},$A{row}),"")')
-                c.number_format = "0.0" if m == "평균시청(초)" else "0.00%"
+                c.number_format = {"평균시청(초)": "0.0", "공유/좋아요": "0.00", "팔로우/좋아요": "0.0%"}.get(m, "0.00%")
             row += 1
         row += 1
-    sm.cell(row, 1, "표본 3개 미만 그룹은 결론에 쓰지 않는다(표본 부족).")
+    sm.cell(row, 1, "표본 3개 미만 그룹은 결론에 쓰지 않는다(표본 부족). 도달이 없으면 x/좋아요 대체지표로 비교한다.")
     sm.column_dimensions["A"].width = 18
-    for L in "BCDEF":
+    for L in "BCDEFGH":
         sm.column_dimensions[L].width = 14
     wb.save(out)
     print("생성:", out)
@@ -99,4 +129,5 @@ def col_idx(name):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "log/2026-11-14_dongubab_성과기록.xlsx")
+    out = sys.argv[1] if len(sys.argv) > 1 else "log/2026-11-14_dongubab_성과기록.xlsx"
+    main(out, load_seed(sys.argv[2]) if len(sys.argv) > 2 else None)
