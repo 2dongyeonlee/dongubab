@@ -27,6 +27,13 @@ description: 다른 인스타 맛집 계정의 레퍼런스(캡처·aside 수집
 5. **차용 vs 비차용 표**: 차용할 형식 / 차용하지 않을 것(정체성 충돌, 계정 규모 차이, 표기 방식 등)과 이유
 6. 내 계정 히트·최근 영상과 같은 항목으로 비교(성과기록 최신 xlsx 참조)
 
+## 트렌드 캡처 받았을 때 (기본 입력, 2026-11-15 동연 결정)
+1. 캡처를 판독해 `.reels-tmp/trend_top.csv`를 쓴다. 헤더: 계정,태그,세부,지역,게시물URL,게시일,공개 조회수,커버 1줄,커버 2줄,첫 3초 화면,영상 길이(초),캡션 첫 줄,캡션 말투,협찬 표기,훅유형
+   - 화면에 없는 값은 빈칸. 판독이 불확실한 숫자는 빈칸으로 두고 보고
+   - 계정 릴스 탭 캡처(썸네일마다 조회수)면 `.reels-tmp/trend_views.csv`(계정,순번,게시물URL,공개조회수,고정여부)도 써서 배수를 계산
+2. `python3 scripts/hookbank.py add --top .reels-tmp/trend_top.csv [--views .reels-tmp/trend_views.csv] --date YYYY-MM-DD --kind 캡처`
+3. 채팅으로 3줄 요약: 이번 캡처에서 반복되는 형식, 내 계정에 가져올 것 1개, 안 가져올 것 1개
+
 ## 훅 모음 적재
 - aside 주간 수집 결과는 `python3 scripts/hookbank.py add --views <조회.csv> --top <상위.csv> --date YYYY-MM-DD`로 `references/hookbank.csv`에 붙이고, 비어 있는 훅유형을 채운다.
 
