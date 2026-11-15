@@ -27,6 +27,9 @@ description: 다른 인스타 맛집 계정의 레퍼런스(캡처·aside 수집
 5. **차용 vs 비차용 표**: 차용할 형식 / 차용하지 않을 것(정체성 충돌, 계정 규모 차이, 표기 방식 등)과 이유
 6. 내 계정 히트·최근 영상과 같은 항목으로 비교(성과기록 최신 xlsx 참조)
 
+## 훅 모음 적재
+- aside 주간 수집 결과는 `python3 scripts/hookbank.py add --views <조회.csv> --top <상위.csv> --date YYYY-MM-DD`로 `references/hookbank.csv`에 붙이고, 비어 있는 훅유형을 채운다.
+
 ## 출력
 `references/YYYY-MM-DD_dongubab_레퍼런스분석_vN.md` (기존 파일은 덮어쓰지 않음)
 - 계정 비교표(팔로워, 조회 중앙값, 중앙값/팔로워, 정체성, 말투)
