@@ -42,9 +42,11 @@ def lint(lines, sponsor=False, facts=None):
             for m in re.finditer(w, s):
                 if "계" not in s[max(0, m.start() - 6):m.start()]:
                     out.append((i, "위반", f"'{w}'는 '○○계 {w}' 비유형만 허용"))
-        prize = re.search(r"1등.*[23]등", s) or re.search(r"\(\d+명\)", s)  # 경품 순위 나열은 최상급 아님
+        prize = (re.search(r"1등.*[23]등", s) or re.search(r"\(\d+명\)", s)
+                 or re.search(r"1등\S*\s*\S*\s*(쿠폰|상품권|경품|당첨)", s))  # 경품 순위는 최상급 아님
+        hearsay = re.search(r"라는|래요|[가-힣]래(?=[\s,.!~]|$)", s)  # 전언형(~라는, ~래요, ~이래)
         for w in SOURCED_ONLY:
-            if w in s and not ("라는" in s or "래요" in s or marked or prize):
+            if w in s and not (hearsay or marked or prize):
                 out.append((i, "위반", f"'{w}'는 출처 표기('~라는') 또는 [확인 필요] 필요"))
         for w in NEEDS_VENDOR:
             if w in s and "[업체 확인]" not in s:
