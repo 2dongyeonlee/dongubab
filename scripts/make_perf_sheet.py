@@ -10,19 +10,19 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
 INPUT = ["No", "게시일", "가게", "카테고리", "협찬", "커버 문구", "커버 유형", "톤",
-         "조회", "도달", "좋아요", "댓글", "공유", "저장", "팔로우", "평균시청(초)", "건너뛰기율", "메모"]
-CALC = ["공유율", "저장율", "팔로우율", "공유/저장", "유형", "공유/좋아요", "저장/좋아요", "팔로우/좋아요"]
+         "조회", "도달", "좋아요", "댓글", "공유", "저장", "팔로우", "평균시청(초)", "건너뛰기율", "비팔로워비율", "메모"]
+CALC = ["공유율", "저장율", "팔로우율", "공유/저장", "유형", "공유/조회", "저장/조회", "팔로우/조회"]
 CATS = ["노포", "숨은맛집", "대중맛집", "바·술집", "브랜드·팝업", "카페·디저트", "기타"]
-COVERS = ["가격·룰", "궁금증(정체숨김)", "구성놀람", "공간반전", "일반워딩", "기타"]
+COVERS = ["가격·룰", "궁금증(정체숨김)", "구성놀람", "공간반전", "신상·소식", "권위차용", "비유·최상급", "혜택·이벤트", "일반워딩", "기타"]
 TONES = ["반말혼잣말", "존댓말구어체", "기타"]
 MAX_ROW = 200
 
 # /log/001, /log/002 실데이터
 SEED = [
     [1, None, "미동식당", "노포", "N", "서대문 만원 안주 오마카세 / 53년된 아파트에 위치한 가성비 좋은 술집",
-     "가격·룰", "반말혼잣말", 142723, 120644, 989, 136, 3900, 2800, 36, 7, None, "출처 log/001, 게시일 확인 필요"],
+     "가격·룰", "반말혼잣말", 142723, 120644, 989, 136, 3900, 2800, 36, 7, None, None, "출처 log/001, 게시일 확인 필요"],
     [2, None, "올디스타코", "바·술집", "N", "을지로 추천 샴페인 바 / 힙한 분위기에 샴페인 페어링 안주 다 성공",
-     "일반워딩", "반말혼잣말", 65297, 58171, 441, 112, 610, 643, 10, 4, 0.589, "출처 log/002, 게시일 확인 필요"],
+     "일반워딩", "반말혼잣말", 65297, 58171, 441, 112, 610, 643, 10, 4, 0.589, None, "출처 log/002, 게시일 확인 필요"],
 ]
 
 
@@ -38,13 +38,13 @@ def load_seed(path):
     for r in csv.DictReader(open(path, encoding="utf-8-sig")):
         row = []
         for k in ["No", "게시일", "가게", "카테고리", "협찬", "커버문구", "커버유형", "톤", "조회", "도달",
-                  "좋아요", "댓글", "공유", "저장", "팔로우", "평균시청", "건너뛰기율", "메모"]:
+                  "좋아요", "댓글", "공유", "저장", "팔로우", "평균시청", "건너뛰기율", "비팔로워비율", "메모"]:
             v = (r.get(k) or "").strip()
             if v == "":
                 row.append(None)
             elif k in num or k == "No":
                 row.append(int(v))
-            elif k == "건너뛰기율":
+            elif k in ("건너뛰기율", "비팔로워비율"):
                 row.append(float(v))
             else:
                 row.append(v)
@@ -79,12 +79,13 @@ def main(out, seed=None):
         ws.cell(r, base + 3, f'=IF(OR({R}{r}="",{F}{r}=""),"",{F}{r}/{R}{r})')
         ws.cell(r, base + 4, f'=IF(OR({S}{r}="",{S}{r}=0,{V}{r}=""),"",{V}{r}/{S}{r})')
         ws.cell(r, base + 5, f'=IF({col("공유/저장")}{r}="","",IF({col("공유/저장")}{r}>=1,"소환형","위시리스트형"))')
-        Lk = col("좋아요")
+        Lk = col("조회")
         for k, src in [(6, V), (7, S), (8, F)]:
             ws.cell(r, base + k, f'=IF(OR({Lk}{r}="",{Lk}{r}=0,{src}{r}=""),"",{src}{r}/{Lk}{r})')
-        ws.cell(r, base + 6).number_format = "0.00"
-        ws.cell(r, base + 7).number_format = "0.00"
-        ws.cell(r, base + 8).number_format = "0.0%"
+        ws.cell(r, base + 6).number_format = "0.00%"
+        ws.cell(r, base + 7).number_format = "0.00%"
+        ws.cell(r, base + 8).number_format = "0.000%"
+        ws.cell(r, col_idx("비팔로워비율")).number_format = "0.0%"
         for k in range(1, 4):
             ws.cell(r, base + k).number_format = "0.00%"
         ws.cell(r, base + 4).number_format = "0.00"
@@ -100,7 +101,7 @@ def main(out, seed=None):
 
     sm = wb.create_sheet("요약")
     rng = lambda n: f"게시물!${col(n)}$2:${col(n)}${MAX_ROW}"
-    metrics = ["공유율", "저장율", "팔로우율", "평균시청(초)", "공유/좋아요", "팔로우/좋아요"]
+    metrics = ["조회", "비팔로워비율", "공유/조회", "팔로우/조회", "공유율", "평균시청(초)"]
     row = 1
     for group, items in [("카테고리", CATS), ("커버 유형", COVERS), ("협찬", ["Y", "N"]), ("톤", TONES)]:
         sm.cell(row, 1, group).font = head
@@ -113,10 +114,10 @@ def main(out, seed=None):
             sm.cell(row, 2, f'=COUNTIFS({rng(group)},$A{row})')
             for j, m in enumerate(metrics):
                 c = sm.cell(row, 3 + j, f'=IFERROR(AVERAGEIFS({rng(m)},{rng(group)},$A{row}),"")')
-                c.number_format = {"평균시청(초)": "0.0", "공유/좋아요": "0.00", "팔로우/좋아요": "0.0%"}.get(m, "0.00%")
+                c.number_format = {"평균시청(초)": "0.0", "조회": "#,##0", "비팔로워비율": "0.0%", "팔로우/조회": "0.000%"}.get(m, "0.00%")
             row += 1
         row += 1
-    sm.cell(row, 1, "표본 3개 미만 그룹은 결론에 쓰지 않는다(표본 부족). 도달이 없으면 x/좋아요 대체지표로 비교한다.")
+    sm.cell(row, 1, "표본 3개 미만 그룹은 결론에 쓰지 않는다(표본 부족). 도달이 비거나 판독 의심이면 x/조회로 비교한다.")
     sm.column_dimensions["A"].width = 18
     for L in "BCDEFGH":
         sm.column_dimensions[L].width = 14
